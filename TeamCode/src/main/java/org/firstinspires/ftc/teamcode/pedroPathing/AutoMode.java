@@ -142,7 +142,7 @@ public class AutoMode extends OpMode {
 
     // Helpers
 
-    /** Waits for the follower to finish, then advances to the given state after an optional delay **/
+    /** Waits for the follower to finish **/
     public void checkIfBusy(int nextState, double delaySeconds) {
         if (!follower.isBusy() && pathTimer.getElapsedTimeSeconds() > delaySeconds) {
             setPathState(nextState);
