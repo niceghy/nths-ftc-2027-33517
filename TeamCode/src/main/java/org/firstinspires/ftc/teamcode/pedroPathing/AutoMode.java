@@ -16,34 +16,60 @@ public class AutoMode extends OpMode {
 
     private SharedPoseStorage.Team selectedTeam = SharedPoseStorage.Team.RED;
     private boolean teamSelected = false;
+    private int mode = 1;
 
-    // -------------------------------------------------------------------------
-    // TODO: Define poses here
-    // -------------------------------------------------------------------------
-    private Pose startPose;
-    // private Pose examplePose = new Pose(x, y, Math.toRadians(heading));
+    private int startPosition = 0;
 
-    // -------------------------------------------------------------------------
-    // TODO: Define path chains here
-    // -------------------------------------------------------------------------
-    // private PathChain examplePath;
+    private Pose startPose, passivePose;
 
-    /** Set starting and intermediate poses based on the selected team/position **/
+    private PathChain toPassive;
+
     private void setPosesForTeam() {
         if (selectedTeam == SharedPoseStorage.Team.RED) {
-            startPose = new Pose(0, 0, Math.toRadians(0)); // TODO: Set RED start pose
+            startPose = new Pose(0, 0, Math.toRadians(0));
         } else {
-            startPose = new Pose(0, 0, Math.toRadians(0)); // TODO: Set BLUE start pose
+            startPose = new Pose(0, 0, Math.toRadians(0));
+        }
+
+        switch (startPosition) {
+            case 0:
+                startPose = new Pose(22.25, 125, Math.toRadians(140));
+                break;
+            case 1:
+                startPose = new Pose(121.75, 125, Math.toRadians(36));
+                break;
+            case 2:
+                startPose = new Pose(56.75, 8.5, Math.toRadians(90));
+                break;
+            default:
+                startPose = new Pose(87.25, 8.5, Math.toRadians(90));
+                break;
+        }
+
+        if (mode == 0) {
+            if (startPosition == 0 || startPosition == 1) {
+                if (selectedTeam == SharedPoseStorage.Team.BLUE) {
+                    passivePose = new Pose(60, 132, Math.toRadians(0));
+                } else {
+                    passivePose = new Pose(84, 132, Math.toRadians(180));
+                }
+            } else {
+                if (selectedTeam == SharedPoseStorage.Team.BLUE) {
+                    passivePose = new Pose(36, 12, Math.toRadians(90));
+                } else {
+                    passivePose = new Pose(108, 12, Math.toRadians(90));
+                }
+            }
         }
     }
 
     public void buildPaths() {
-        // TODO: Build paths here
-        // Example:
-        // examplePath = follower.pathBuilder()
-        //         .addPath(new BezierLine(startPose, examplePose))
-        //         .setLinearHeadingInterpolation(startPose.getHeading(), examplePose.getHeading())
-        //         .build();
+        if (mode == 0) {
+            toPassive = follower.pathBuilder()
+                    .addPath(new BezierLine(startPose, passivePose))
+                    .setLinearHeadingInterpolation(startPose.getHeading(), passivePose.getHeading())
+                    .build();
+        }
     }
 
     @Override
@@ -54,9 +80,6 @@ public class AutoMode extends OpMode {
 
         follower = Constants.createFollower(hardwareMap);
 
-        // TODO: Initialize hardware here
-        // e.g. motor = hardwareMap.get(DcMotorEx.class, "motorName");
-
         Drawing.init();
 
         telemetry.addLine("Initialized. Select team in init_loop.");
@@ -66,33 +89,74 @@ public class AutoMode extends OpMode {
     @Override
     public void init_loop() {
         telemetry.addLine("====SELECT STARTING POSITION====");
-        telemetry.addLine("X Button: Blue team");
-        telemetry.addLine("B Button: Red team");
+        telemetry.addLine("Left Action Button: Front of the Blue Goal");
+        telemetry.addLine("Top Action Button: Front of the Red Goal");
+        telemetry.addLine("Bottom Action Button: Left of the Small Launch Area");
+        telemetry.addLine("Right Action Button: Right of the Small Launch Area");
         telemetry.addLine();
+        telemetry.addLine("Up D-Pad: Switch Modes");
+        telemetry.addLine();
+
+        if (teamSelected) {
+            switch (startPosition) {
+                case 0:
+                    telemetry.addLine("STATUS: Starting at the front of the BLUE goal");
+                    break;
+                case 1:
+                    telemetry.addLine("STATUS: Starting at the front of the RED goal");
+                    break;
+                case 2:
+                    telemetry.addLine("STATUS: Starting at the BLUE small launch area");
+                    break;
+                default:
+                    telemetry.addLine("STATUS: Starting at the RED small launch area");
+                    break;
+            }
+        } else {
+            telemetry.addLine("STATUS: Waiting..");
+        }
+
+        telemetry.addLine("MODE: " + (mode == 0 ? "Idle" : "Active"));
 
         if (gamepad1.x) {
             selectedTeam = SharedPoseStorage.Team.BLUE;
+            startPosition = 0;
+            teamSelected = true;
+        } else if (gamepad1.y) {
+            selectedTeam = SharedPoseStorage.Team.RED;
+            startPosition = 1;
+            teamSelected = true;
+        } else if (gamepad1.a) {
+            selectedTeam = SharedPoseStorage.Team.BLUE;
+            startPosition = 2;
             teamSelected = true;
         } else if (gamepad1.b) {
             selectedTeam = SharedPoseStorage.Team.RED;
+            startPosition = 3;
             teamSelected = true;
         }
 
-        telemetry.addLine("STATUS: " + (teamSelected ? "Team: " + selectedTeam : "Waiting for selection.."));
+        if (gamepad1.dpadUpWasPressed()) {
+            if (mode == 1) {
+                mode = 0;
+            } else {
+                mode = 1;
+            }
+        }
+
         telemetry.update();
     }
 
     @Override
     public void start() {
         if (!teamSelected) {
-            throw new IllegalStateException("TEAM NOT SELECTED! Use the controller buttons during initialization to select a team before pressing play!");
+            throw new IllegalStateException("START POSITION NOT SELECTED! Use the buttons on your controller during initialization to select a position before pressing play!");
         }
 
         setPosesForTeam();
         follower.setStartingPose(startPose);
         buildPaths();
 
-        // Save team and pose for TeleOp handoff
         SharedPoseStorage.currentTeam  = selectedTeam;
         SharedPoseStorage.teamAvailable = true;
 
@@ -105,7 +169,6 @@ public class AutoMode extends OpMode {
         follower.update();
         autonomousPathUpdate();
 
-        // Continuously save pose for TeleOp handoff
         SharedPoseStorage.currentPose  = follower.getPose();
         SharedPoseStorage.poseAvailable = true;
 
@@ -118,38 +181,39 @@ public class AutoMode extends OpMode {
         Drawing.drawDebug(follower);
     }
 
-    /** State machine — add cases as your routine grows **/
     public void autonomousPathUpdate() {
         switch (pathState) {
             case 0:
-                // TODO: Start first path and advance state
-                // follower.followPath(examplePath, true);
-                setPathState(1);
+                if (mode == 1) {
+                    setPathState(1);
+                } else {
+                    setPathState(10);
+                }
                 break;
 
             case 1:
-                // TODO: Wait for path to finish, then advance
-                checkIfBusy(2, 0);
                 break;
 
-            case 2:
-                // TODO: Next action
+            case 10:
+                follower.followPath(toPassive, true);
+                setPathState(11);
                 break;
 
-            // Add more cases as needed...
+            case 11:
+                checkIfBusy(12, 0);
+                break;
+
+            case 12:
+                break;
         }
     }
 
-    // Helpers
-
-    /** Waits for the follower to finish **/
     public void checkIfBusy(int nextState, double delaySeconds) {
         if (!follower.isBusy() && pathTimer.getElapsedTimeSeconds() > delaySeconds) {
             setPathState(nextState);
         }
     }
 
-    /** Sets path state and resets the path timer **/
     public void setPathState(int state) {
         pathState = state;
         pathTimer.resetTimer();
